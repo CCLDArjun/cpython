@@ -41,6 +41,11 @@ the following command can be used to display the disassembly of
 
 (The "2" is a line number).
 
+c:mod:`dis` an also be invoked as a script to debug other scripts. For example::
+
+    python -m dis myscript.py
+
+
 Bytecode analysis
 -----------------
 
