@@ -4212,12 +4212,6 @@ long_pow(PyObject *v, PyObject *w, PyObject *x)
     PyLongObject *temp = NULL;
     PyLongObject *a2 = NULL; /* may temporarily hold a**2 % c */
 
-    /* k-ary values.  If the exponent is large enough, table is
-     * precomputed so that table[i] == a**(2*i+1) % c for i in
-     * range(EXP_TABLE_LEN).
-     */
-    PyLongObject *table[EXP_TABLE_LEN] = {0};
-
     /* a, b, c = v, w, x */
     CHECK_BINOP(v, w);
     a = (PyLongObject*)v; Py_INCREF(a);
@@ -4233,6 +4227,63 @@ long_pow(PyObject *v, PyObject *w, PyObject *x)
         Py_DECREF(b);
         Py_RETURN_NOTIMPLEMENTED;
     }
+
+
+    /* Perform a modular reduction, X = X % c, but leave X alone if c
+     * is NULL.
+     */
+#define REDUCE(X)                                       \
+    do {                                                \
+        if (c != NULL) {                                \
+            if (l_divmod(X, c, NULL, &temp) < 0)        \
+                goto Error;                             \
+            Py_XDECREF(X);                              \
+            X = temp;                                   \
+            temp = NULL;                                \
+        }                                               \
+    } while(0)
+
+    /* Multiply two values, then reduce the result:
+       result = X*Y % c.  If c is NULL, skip the mod. */
+#define MULT(X, Y, result)                      \
+    do {                                        \
+        temp = (PyLongObject *)long_mul(X, Y);  \
+        if (temp == NULL)                       \
+            goto Error;                         \
+        Py_XDECREF(result);                     \
+        result = temp;                          \
+        temp = NULL;                            \
+        REDUCE(result);                         \
+    } while(0)
+
+    i = Py_SIZE(b);
+    digit bi = i ? b->ob_digit[i-1] : 0;
+    digit bit;
+    if (i <= 1 && bi <= 3) {
+        /* aim for minimal overhead */
+        if (bi >= 2) {
+            MULT(a, a, z);
+            if (bi == 3) {
+                MULT(z, a, z);
+            }
+            goto Done;
+        }
+        else if (bi == 1) {
+            /* Multiplying by 1 serves two purposes: if `a` is of an int
+             * subclass, makes the result an int (e.g., pow(False, 1) returns
+             * 0 instead of False), and potentially reduces `a` by the modulus.
+             */
+            MULT(a, z, z);
+        }
+        /* else bi is 0, and z==1 is correct */
+    }
+
+    /* k-ary values.  If the exponent is large enough, table is
+     * precomputed so that table[i] == a**(2*i+1) % c for i in
+     * range(EXP_TABLE_LEN).
+     */
+    PyLongObject *table[EXP_TABLE_LEN] = {0};
+
 
     if (Py_SIZE(b) < 0 && c == NULL) {
         /* if exponent is negative and there's no modulus:
@@ -4322,53 +4373,7 @@ long_pow(PyObject *v, PyObject *w, PyObject *x)
     if (z == NULL)
         goto Error;
 
-    /* Perform a modular reduction, X = X % c, but leave X alone if c
-     * is NULL.
-     */
-#define REDUCE(X)                                       \
-    do {                                                \
-        if (c != NULL) {                                \
-            if (l_divmod(X, c, NULL, &temp) < 0)        \
-                goto Error;                             \
-            Py_XDECREF(X);                              \
-            X = temp;                                   \
-            temp = NULL;                                \
-        }                                               \
-    } while(0)
-
-    /* Multiply two values, then reduce the result:
-       result = X*Y % c.  If c is NULL, skip the mod. */
-#define MULT(X, Y, result)                      \
-    do {                                        \
-        temp = (PyLongObject *)long_mul(X, Y);  \
-        if (temp == NULL)                       \
-            goto Error;                         \
-        Py_XDECREF(result);                     \
-        result = temp;                          \
-        temp = NULL;                            \
-        REDUCE(result);                         \
-    } while(0)
-
-    i = Py_SIZE(b);
-    digit bi = i ? b->ob_digit[i-1] : 0;
-    digit bit;
-    if (i <= 1 && bi <= 3) {
-        /* aim for minimal overhead */
-        if (bi >= 2) {
-            MULT(a, a, z);
-            if (bi == 3) {
-                MULT(z, a, z);
-            }
-        }
-        else if (bi == 1) {
-            /* Multiplying by 1 serves two purposes: if `a` is of an int
-             * subclass, makes the result an int (e.g., pow(False, 1) returns
-             * 0 instead of False), and potentially reduces `a` by the modulus.
-             */
-            MULT(a, z, z);
-        }
-        /* else bi is 0, and z==1 is correct */
-    }
+    if (i <= 1 && bi <= 3) {}
     else if (i <= HUGE_EXP_CUTOFF / PyLong_SHIFT ) {
         /* Left-to-right binary exponentiation (HAC Algorithm 14.79) */
         /* http://www.cacr.math.uwaterloo.ca/hac/about/chap14.pdf    */
