@@ -264,7 +264,7 @@ class CodeTest(unittest.TestCase):
             ("co_posonlyargcount", 0),
             ("co_kwonlyargcount", 0),
             ("co_nlocals", 1),
-            ("co_stacksize", 0),
+            ("co_stacksize", 1),
             ("co_flags", code.co_flags | inspect.CO_COROUTINE),
             ("co_firstlineno", 100),
             ("co_code", code2.co_code),
@@ -349,14 +349,14 @@ class CodeTest(unittest.TestCase):
         def foo():
             pass
 
-        # assert that opcode 238 is invalid
-        self.assertEqual(opname[238], '<238>')
+        # assert that opcode 229 is invalid
+        self.assertEqual(opname[229], '<229>')
 
-        # change first opcode to 0xee (=238)
+        # change first opcode to 0xeb (=229)
         foo.__code__ = foo.__code__.replace(
-            co_code=b'\xee' + foo.__code__.co_code[1:])
+            co_code=b'\xe5' + foo.__code__.co_code[1:])
 
-        msg = f"unknown opcode 238"
+        msg = "unknown opcode 229"
         with self.assertRaisesRegex(SystemError, msg):
             foo()
 
