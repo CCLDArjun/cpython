@@ -320,8 +320,9 @@ class BufferedIncrementalDecoder(IncrementalDecoder):
         raise NotImplementedError
 
     def decode(self, input, final=False):
+        import pdb; pdb.set_trace()
         # decode input (taking the buffer into account)
-        data = self.buffer + input
+        data = self.buffer + (input or b"")
         (result, consumed) = self._buffer_decode(data, self.errors, final)
         # keep undecoded input until the next call
         self.buffer = data[consumed:]
